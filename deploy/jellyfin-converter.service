@@ -1,0 +1,17 @@
+[Unit]
+Description=Jellyfin Media Converter Web GUI & Queue Executor
+After=network.target rclone-mount.service
+Wants=rclone-mount.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/jellyfin-converter-lxc
+ExecStart=/usr/bin/python3 /opt/jellyfin-converter-lxc/server.py
+Restart=always
+RestartSec=5
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

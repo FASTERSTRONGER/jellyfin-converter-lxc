@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jellyfin Transcoder & Queue Manager</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-badge">FFMPEG</div>
+        <div>
+          <h1>Jellyfin Media Transcoder</h1>
+          <p class="subtitle">Direct Play Optimizer • LXC Server Executor & Format Auditor</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="sys-pill">
+          <span class="dot green"></span>
+          <span id="gpuName">Memuat info sistem...</span>
+        </div>
+        <div class="sys-pill">
+          <span class="label">Free Space:</span>
+          <span id="freeDiskSpace">-- GB</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top Metrics -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-title">Total File Terdeteksi</div>
+        <div class="metric-value" id="statTotal">0</div>
+        <div class="metric-sub" id="statTotalSub">/mnt/gdrive/raw</div>
+      </div>
+      <div class="metric-card highlight-warn">
+        <div class="metric-title">Wajib Konversi</div>
+        <div class="metric-value text-warn" id="statNeedsTranscode">0</div>
+        <div class="metric-sub">HEVC / 10-bit / HDR / No Stereo</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Sudah Kompatibel</div>
+        <div class="metric-value text-success" id="statCompatible">0</div>
+        <div class="metric-sub">Direct Play Ready (1080p x264)</div>
+      </div>
+      <div class="metric-card highlight-success">
+        <div class="metric-title">Subtitle Indonesia</div>
+        <div class="metric-value text-success" id="statIndoSubs">0</div>
+        <div class="metric-sub" id="statExtSubs">0 file eksternal</div>
+      </div>
+      <div class="metric-card highlight-info">
+        <div class="metric-title">Antrean Aktif</div>
+        <div class="metric-value text-info" id="statQueueCount">0</div>
+        <div class="metric-sub" id="statQueueConverting">0 sedang diproses</div>
+      </div>
+    </section>
+
+    <!-- Control & Scanner Panel -->
+    <section class="card panel-scanner">
+      <div class="panel-header">
+        <h3 id="scannerTitle">Scanner Media & Pemeriksaan Subtitle</h3>
+        <div class="actions">
+          <button id="btnStartScan" class="btn btn-primary">🔍 Mulai Scan</button>
+          <button id="btnStopScan" class="btn btn-secondary" style="display:none;">⏹ Hentikan Scan</button>
+          <button id="btnScanSubs" class="btn btn-outline" title="Pindai semua subtitle internal dan file .srt eksternal">📝 Periksa Semua Subtitle</button>
+        </div>
+      </div>
+      <div id="scanProgressBarContainer" class="progress-wrap" style="display:none;">
+        <div class="progress-info">
+          <span id="scanStatusText">Memindai file...</span>
+          <span id="scanCountText">0 / 0</span>
+        </div>
+        <div class="progress-bar">
+          <div id="scanProgressFill" class="progress-fill" style="width: 0%;"></div>
+        </div>
+        <div id="scanCurrentFile" class="file-text-snippet"></div>
+      </div>
+      <div id="subScanProgressBarContainer" class="progress-wrap" style="display:none; margin-top: 12px;">
+        <div class="progress-info">
+          <span id="subScanStatusText">Memeriksa subtitle internal & eksternal...</span>
+          <span id="subScanCountText">0 / 0</span>
+        </div>
+        <div class="progress-bar">
+          <div id="subScanProgressFill" class="progress-fill" style="width: 0%; background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
+        </div>
+        <div id="subScanCurrentFile" class="file-text-snippet"></div>
+      </div>
+    </section>
+
+    <!-- Queue & Transcode Manager -->
+    <section class="card panel-queue">
+      <div class="panel-header">
+        <div class="queue-title-wrap">
+          <h3>Antrean & Pengaturan Transcode</h3>
+          <span id="queueBadge" class="status-pill status-idle">Idle</span>
+        </div>
+        <div class="actions">
+          <button id="btnStartQueue" class="btn btn-success">▶ Jalankan Antrean</button>
+          <button id="btnPauseQueue" class="btn btn-warning" style="display:none;">⏸ Pause Antrean</button>
+          <button id="btnClearCompleted" class="btn btn-outline">Bersihkan Selesai</button>
+        </div>
+      </div>
+
+      <!-- Settings Bar -->
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Folder Sumber Scan (Raw / Library):</label>
+          <input type="text" id="settingSourceDir" value="/mnt/gdrive/raw">
+        </div>
+        <div class="setting-item">
+          <label>Folder Output Tujuan (Hasil Convert):</label>
+          <input type="text" id="settingOutputDir" value="/mnt/gdrive/jellyfin">
+        </div>
+        <div class="setting-item">
+          <label>Folder Staging Lokal (Temp Render):</label>
+          <input type="text" id="settingStagingDir" value="/var/cache/jellyfin-converter/staging" placeholder="Kosongkan untuk tulis langsung">
+        </div>
+        <div class="setting-item">
+          <label>Mesin Encoder:</label>
+          <select id="settingEncoder">
+            <option value="libx264">CPU Multi-Core (libx264 + libplacebo)</option>
+            <option value="h264_amf">GPU AMD AMF (Khusus Windows)</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Paralel Render (Film Bersamaan):</label>
+          <select id="settingWorkers">
+            <option value="1" selected>1 Film (Direkomendasikan di LXC)</option>
+            <option value="2">2 Film (Multi-Thread Paralel)</option>
+            <option value="3">3 Film (Maksimal)</option>
+          </select>
+        </div>
+        <div class="setting-item btn-align">
+          <button id="btnSaveSettings" class="btn btn-outline">Simpan Pengaturan</button>
+        </div>
+      </div>
+
+      <!-- Active Workers Progress Grid -->
+      <div id="activeWorkersContainer" class="active-workers-grid"></div>
+
+      <!-- Pending Queue List -->
+      <div class="queue-table-wrap">
+        <h4>Daftar Antrean</h4>
+        <div id="queueEmptyNotice" class="empty-state">Belum ada item dalam antrean.</div>
+        <table id="queueTable" class="data-table" style="display:none;">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Aksi</th>
+              <th style="width: 100px;">Status</th>
+              <th>Judul & Nama File</th>
+              <th>Progress</th>
+              <th>Kecepatan / FPS</th>
+              <th>Estimasi (ETA)</th>
+            </tr>
+          </thead>
+          <tbody id="queueTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- File Library Explorer -->
+    <section class="card panel-files">
+      <div class="panel-header wrap-responsive">
+        <div class="filter-tabs" id="filterTabs">
+          <button class="tab-btn active" data-filter="all">Semua File</button>
+          <button class="tab-btn" data-filter="needs_transcode">Wajib Konversi</button>
+          <button class="tab-btn" data-filter="audio_only">🎧 Transcode Audio Saja</button>
+          <button class="tab-btn" data-filter="compatible">Sudah Kompatibel</button>
+          <button class="tab-btn" data-filter="has_indo_subs">🇮🇩 Ada Sub Indo</button>
+          <button class="tab-btn" data-filter="external_subs">📄 Sub Eksternal</button>
+          <button class="tab-btn" data-filter="no_subs">🚫 Tanpa Subtitle</button>
+          <button class="tab-btn" data-filter="has_comm">🎙️ Ada Komentar</button>
+          <button class="tab-btn" data-filter="queued">Dalam Antrean</button>
+          <button class="tab-btn" data-filter="not_completed">⏳ Belum Selesai</button>
+          <button class="tab-btn" data-filter="completed">✔ Selesai</button>
+        </div>
+        <div class="search-actions">
+          <input type="text" id="searchBox" placeholder="Cari judul film/path..." class="search-input">
+          <button id="btnAddAllTranscode" class="btn btn-secondary">⚡ Masukkan Semua Wajib Konversi</button>
+        </div>
+      </div>
+
+      <!-- Combined Filter Active Summary Bar -->
+      <div id="filterSummaryBar" class="filter-summary-bar" style="display:none;">
+        <div class="active-tags">
+          <span>Filter Gabungan Aktif:</span>
+          <span id="activeFilterTags"></span>
+        </div>
+        <button id="btnResetFilters" class="btn-link">↺ Reset Filter</button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 130px;">Aksi</th>
+              <th>Judul & Nama File</th>
+              <th>Resolusi</th>
+              <th>Video Stream</th>
+              <th>Audio Tracks</th>
+              <th>Subtitles (Int/Ext)</th>
+              <th>Alasan / Status Konversi</th>
+            </tr>
+          </thead>
+          <tbody id="filesTableBody">
+            <tr>
+              <td colspan="7" class="text-center py-4">Memuat data pustaka...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-bar">
+        <button id="btnPrevPage" class="btn btn-outline btn-sm" disabled>« Sebelumnya</button>
+        <span id="pageInfo">Halaman 1</span>
+        <button id="btnNextPage" class="btn btn-outline btn-sm">Berikutnya »</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+[Unit]
+Description=Rclone Mount Google Drive for Jellyfin Converter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+Environment="GODEBUG=madvdontneed=1"
+Environment="GOMEMLIMIT=1500MiB"
+ExecStartPre=-/bin/fusermount -uz /mnt/gdrive
+ExecStart=/usr/bin/rclone mount gdrive-converter:ProxmoxStorage /mnt/gdrive \
+    --allow-other \
+    --allow-non-empty \
+    --vfs-cache-mode full \
+    --vfs-cache-max-age 6h \
+    --vfs-cache-max-size 25G \
+    --vfs-read-ahead 128M \
+    --vfs-read-chunk-size 16M \
+    --vfs-read-chunk-size-limit 64M \
+    --buffer-size 16M \
+    --dir-cache-time 1h \
+    --poll-interval 15s \
+    --umask 022 \
+    --log-level NOTICE \
+    --log-file=/var/log/rclone-converter.log
+ExecStop=/bin/fusermount -uz /mnt/gdrive
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
