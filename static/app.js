@@ -1,3 +1,13 @@
+// Redirect to /login if any API request returns 401 Unauthorized
+const _origFetch = window.fetch;
+window.fetch = async (...args) => {
+  const res = await _origFetch(...args);
+  if (res.status === 401) {
+    window.location.href = "/login";
+  }
+  return res;
+};
+
 let activeFilters = new Set(["all"]);
 let currentSearch = "";
 let currentPage = 0;
@@ -46,6 +56,13 @@ function initEventListeners() {
   document.getElementById("btnClearCompleted").addEventListener("click", clearCompletedQueue);
   document.getElementById("btnAddAllTranscode").addEventListener("click", addAllToQueue);
   document.getElementById("btnSaveSettings").addEventListener("click", saveSettings);
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", async () => {
+      await fetch("/api/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+  }
 
   // Multi-Filter tabs
   document.querySelectorAll(".tab-btn").forEach(btn => {

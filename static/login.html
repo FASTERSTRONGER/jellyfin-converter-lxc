@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Admin - Jellyfin Media Transcoder</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .login-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .login-header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+    .login-header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .form-group input {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+    .form-group input:focus {
+      border-color: var(--primary);
+    }
+    .login-error {
+      display: none;
+      background-color: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.85rem;
+    }
+    .btn-login {
+      width: 100%;
+      justify-content: center;
+      padding: 11px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-badge">FFMPEG</div>
+      <div>
+        <h1>Admin Login</h1>
+        <p>Jellyfin Media Transcoder</p>
+      </div>
+    </div>
+
+    <div id="loginError" class="login-error"></div>
+
+    <form id="loginForm" class="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" id="btnLogin" class="btn btn-primary btn-login">Masuk</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById("loginForm");
+    const errBox = document.getElementById("loginError");
+    const btn = document.getElementById("btnLogin");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errBox.style.display = "none";
+      btn.disabled = true;
+      btn.textContent = "Memeriksa...";
+
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.location.href = "/";
+        } else {
+          errBox.textContent = data.error || "Username atau password salah.";
+          errBox.style.display = "block";
+        }
+      } catch (err) {
+        errBox.textContent = "Gagal terhubung ke server.";
+        errBox.style.display = "block";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Masuk";
+      }
+    });
+  </script>
+</body>
+</html>

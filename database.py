@@ -127,7 +127,8 @@ def set_setting(key, value):
 def get_all_settings():
     with get_connection() as conn:
         rows = conn.execute("SELECT key, value FROM settings").fetchall()
-        return {r["key"]: r["value"] for r in rows}
+        hidden = {"admin_password_hash", "session_secret"}
+        return {r["key"]: r["value"] for r in rows if r["key"] not in hidden}
 
 def upsert_media_file(data):
     with get_connection() as conn:
