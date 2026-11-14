@@ -30,15 +30,14 @@ const filterLabels = {
 document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   loadSystemInfo();
-  pollStats();
   loadFiles();
-  loadQueue();
 
-  // Polling loop every 1500ms
-  setInterval(() => {
-    pollStats();
-    loadQueue();
-  }, 1500);
+  // Sequential polling loop prevents request pile-up when CPU is busy rendering
+  async function pollingLoop() {
+    await Promise.allSettled([pollStats(), loadQueue()]);
+    setTimeout(pollingLoop, 2000);
+  }
+  pollingLoop();
 });
 
 function initEventListeners() {

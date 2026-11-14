@@ -300,11 +300,21 @@ class ConverterHandler(http.server.SimpleHTTPRequestHandler):
                 return {}
         return {}
 
+class AppTCPServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        _, exc_value, _ = sys.exc_info()
+        if isinstance(exc_value, (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def run_server():
     init_db()
     ensure_admin_initialized()
-    socketserver.ThreadingTCPServer.allow_reuse_address = True
-    with socketserver.ThreadingTCPServer(("", PORT), ConverterHandler) as httpd:
+    with AppTCPServer(("", PORT), ConverterHandler) as httpd:
         print(f"Jellyfin Transcoder Server berjalan di http://localhost:{PORT}")
         try:
             httpd.serve_forever()
