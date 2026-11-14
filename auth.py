@@ -34,12 +34,19 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 
+_CACHED_SESSION_SECRET = None
+
+
 def _get_session_secret() -> bytes:
+    global _CACHED_SESSION_SECRET
+    if _CACHED_SESSION_SECRET is not None:
+        return _CACHED_SESSION_SECRET
     secret = get_setting("session_secret", "")
     if not secret:
         secret = secrets.token_hex(32)
         set_setting("session_secret", secret)
-    return secret.encode("utf-8")
+    _CACHED_SESSION_SECRET = secret.encode("utf-8")
+    return _CACHED_SESSION_SECRET
 
 
 def ensure_admin_initialized():
