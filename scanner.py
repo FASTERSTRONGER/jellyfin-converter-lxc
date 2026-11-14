@@ -14,6 +14,7 @@ class Scanner:
         self.total_found = 0
         self.scanned_count = 0
         self.current_file = ""
+        self.scan_id = 0
         self.thread = None
         
         # Subtitle scan state
@@ -27,6 +28,7 @@ class Scanner:
     def get_status(self):
         return {
             "is_scanning": self.is_scanning,
+            "scan_id": self.scan_id,
             "total_found": self.total_found,
             "scanned_count": self.scanned_count,
             "current_file": self.current_file,
@@ -49,7 +51,8 @@ class Scanner:
         self.stop_requested = False
         self.total_found = 0
         self.scanned_count = 0
-        self.current_file = ""
+        self.current_file = f"Memindai {source_dir}..."
+        self.scan_id += 1
         
         self.thread = threading.Thread(target=self._run_scan, args=(source_dir,), daemon=True)
         self.thread.start()
@@ -162,7 +165,12 @@ class Scanner:
                 print(f"Failed to process {full_path}: {e}")
 
         self.is_scanning = False
-        self.current_file = "Scan selesai." if not self.stop_requested else "Scan dihentikan."
+        if self.stop_requested:
+            self.current_file = "Scan dihentikan."
+        elif self.total_found == 0:
+            self.current_file = f"Selesai: 0 file video ditemukan di {source_dir}"
+        else:
+            self.current_file = f"Scan selesai: {self.scanned_count} file diproses."
         print(f"Scan finished. Processed {self.scanned_count} files.")
 
 scanner = Scanner()

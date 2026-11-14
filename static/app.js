@@ -122,6 +122,7 @@ async function loadSystemInfo() {
 
 let lastStatsSnapshot = null;
 let lastScannerState = null;
+let lastCompletedScanId = 0;
 
 async function pollStats() {
   try {
@@ -152,8 +153,13 @@ async function pollStats() {
       total_files: stats.total_files
     };
 
-    // Auto-refresh if scanning just finished
-    if (lastScannerState !== null && lastScannerState.is_scanning && !scanner.is_scanning) {
+    // Auto-refresh if scanning just finished (including sub-second scans)
+    const scanJustFinished = (
+      (lastScannerState !== null && lastScannerState.is_scanning && !scanner.is_scanning) ||
+      (!scanner.is_scanning && scanner.scan_id > 0 && scanner.scan_id !== lastCompletedScanId)
+    );
+    if (scanJustFinished) {
+      lastCompletedScanId = scanner.scan_id || lastCompletedScanId;
       loadFiles();
     }
     lastScannerState = { is_scanning: scanner.is_scanning };
@@ -204,10 +210,14 @@ async function pollStats() {
       document.getElementById("scanCurrentFile").textContent = scanner.current_file;
     } else {
       btnStartScan.style.display = "inline-flex";
+      btnStartScan.disabled = false;
       btnStopScan.style.display = "none";
-      if (scanner.current_file && scanner.current_file.includes("selesai")) {
+      if (scanner.current_file && (scanner.current_file.includes("selesai") || scanner.current_file.includes("Selesai") || scanner.current_file.includes("dihentikan"))) {
+        scanContainer.style.display = "block";
         document.getElementById("scanStatusText").textContent = scanner.current_file;
+        document.getElementById("scanCountText").textContent = `${scanner.scanned_count} / ${scanner.total_found} file`;
         document.getElementById("scanProgressFill").style.width = "100%";
+        document.getElementById("scanCurrentFile").textContent = "";
       }
     }
 
@@ -584,8 +594,40 @@ function renderQueueTable(items) {
 
 // Action Handlers
 async function startScan() {
-  await fetch("/api/scan/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-  pollStats();
+  const srcInput = document.getElementById("settingSourceDir");
+  const source_dir = srcInput ? srcInput.value.trim() : "";
+  const scanContainer = document.getElementById("scanProgressBarContainer");
+  const btnStartScan = document.getElementById("btnStartScan");
+
+  if (btnStartScan) btnStartScan.disabled = true;
+  if (scanContainer) {
+    scanContainer.style.display = "block";
+    document.getElementById("scanStatusText").textContent = "Memulai pemindaian...";
+    document.getElementById("scanCountText").textContent = "0 / 0";
+    document.getElementById("scanProgressFill").style.width = "0%";
+    document.getElementById("scanCurrentFile").textContent = source_dir || "";
+  }
+
+  try {
+    const res = await fetch("/api/scan/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_dir })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      if (scanContainer) scanContainer.style.display = "none";
+      alert(data.error || "Gagal memulai scan.");
+    } else if (data.source_dir) {
+      updateSourceDirLabels(data.source_dir);
+    }
+  } catch (err) {
+    alert("Gagal terhubung ke server saat memulai scan.");
+  } finally {
+    if (btnStartScan) btnStartScan.disabled = false;
+    await pollStats();
+    await loadFiles();
+  }
 }
 
 async function startSubtitleScan() {

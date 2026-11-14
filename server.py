@@ -101,6 +101,10 @@ class ConverterHandler(http.server.SimpleHTTPRequestHandler):
             self.path = "/style.css"
             return super().do_GET()
 
+        if path in ("/favicon.svg", "/favicon.ico", "/static/favicon.svg"):
+            self.path = "/favicon.svg"
+            return super().do_GET()
+
         if not self._require_auth(is_api=path.startswith("/api/")):
             return
 
@@ -190,9 +194,18 @@ class ConverterHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/scan/start":
             default_src = "F:\\" if os.name == "nt" else "/mnt/gdrive/raw"
-            src = body.get("source_dir") or get_setting("source_dir", default_src)
+            req_src = (body.get("source_dir") or "").strip()
+            src = req_src or get_setting("source_dir", default_src)
+            if req_src:
+                set_setting("source_dir", req_src)
+            if not os.path.exists(src):
+                self.send_json({"success": False, "error": f"Folder sumber tidak ditemukan: {src}"}, status=400)
+                return
             success = scanner.start(src)
-            self.send_json({"success": success})
+            if not success:
+                self.send_json({"success": False, "error": "Pemindaian sedang berlangsung."})
+                return
+            self.send_json({"success": True, "source_dir": src})
 
         elif path == "/api/scan/stop":
             scanner.stop()
